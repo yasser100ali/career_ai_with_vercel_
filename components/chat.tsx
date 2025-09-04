@@ -14,6 +14,48 @@ import { Button } from "@/components/ui/button";
 import { RotateCcw } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
+// Resume Panel Component
+function ResumePanel() {
+  return (
+    <div className="flex flex-col h-full p-8">
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center space-y-4 max-w-md">
+          <h2 className="text-3xl font-bold text-foreground">Resume Crafting</h2>
+          <p className="text-lg text-muted-foreground">
+            AI-powered resume optimization and generation tools will be available here.
+          </p>
+          <div className="bg-muted/50 rounded-lg p-6">
+            <p className="text-sm text-muted-foreground">
+              Coming soon: Resume analysis, optimization suggestions, and professional formatting.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Job Panel Component
+function JobPanel() {
+  return (
+    <div className="flex flex-col h-full p-8">
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center space-y-4 max-w-md">
+          <h2 className="text-3xl font-bold text-foreground">Job Search</h2>
+          <p className="text-lg text-muted-foreground">
+            Advanced job search and matching tools will be available here.
+          </p>
+          <div className="bg-muted/50 rounded-lg p-6">
+            <p className="text-sm text-muted-foreground">
+              Coming soon: Job database, advanced filters, and personalized recommendations.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Chat() {
   const chatId = "001";
 
@@ -24,7 +66,9 @@ export function Chat() {
   const [splitScreenMode, setSplitScreenMode] = React.useState<"none" | "resume" | "job">("none");
   const thinkingLogsByIdRef = React.useRef<Record<string, string[]>>({});
   const resumeByIdRef = React.useRef<Record<string, { url: string; name: string; contentType: string } | null>>({});
-
+  const [panelVisible, setPanelVisible] = React.useState(false); // animates width
+  const rightPanelRef = React.useRef<HTMLDivElement | null>(null);
+  
   // Remove startup test once verified
 
   const append = async (
@@ -155,17 +199,33 @@ export function Chat() {
   const [messagesContainerRef, messagesEndRef] =
     useScrollToBottom<HTMLDivElement>(140);
 
-  // Split screen handlers
   const handleResumeCrafting = () => {
     setSplitScreenMode("resume");
+    // mount first, then animate open
+    requestAnimationFrame(() => setPanelVisible(true));
   };
-
+  
   const handleJobSearch = () => {
     setSplitScreenMode("job");
+    requestAnimationFrame(() => setPanelVisible(true));
   };
-
+  
   const handleBackToChat = () => {
-    setSplitScreenMode("none");
+    // start closing animation
+    setPanelVisible(false);
+  
+    // wait until animation ends, then unmount the right panel
+    const node = rightPanelRef.current;
+    if (node) {
+      const onDone = () => {
+        setSplitScreenMode("none");
+        node.removeEventListener("transitionend", onDone);
+      };
+      node.addEventListener("transitionend", onDone);
+    } else {
+      // fallback if transitionend doesn’t fire
+      setTimeout(() => setSplitScreenMode("none"), 320);
+    }
   };
 
   return (
@@ -213,26 +273,27 @@ export function Chat() {
           </Button>
         </div>
       </aside>
-
-      {/* Chat area - full width or half width based on split screen mode */}
+      {/* Chat area - occupies remaining width */}
       <div
         className={cn(
-          "flex flex-col transition-all duration-500 ease-in-out",
-          splitScreenMode === "none"
-            ? cn("min-w-0 flex-1 min-h-[100dvh]", isSidebarOpen ? "ml-56" : "ml-16")
-            : "w-1/2 min-h-[100dvh]"
+          "flex flex-col min-h-[100dvh] transition-[width,margin] duration-300 ease-out",
+          isSidebarOpen ? "ml-56" : "ml-16"
         )}
+        style={{
+          width: panelVisible ? "50%" : "100%",
+        }}
       >
-
-        <main className={cn(
-          "flex flex-col min-w-0 flex-1",
-          splitScreenMode === "none" ? "" : "ml-0"
-        )}>
+        <main className={cn("flex flex-col min-w-0 flex-1")}>
           <div
             ref={messagesContainerRef}
             className="flex flex-col min-w-0 flex-1 gap-6 pt-4 pb-40"
           >
-            {messages.length === 0 && <Overview onResumeCrafting={handleResumeCrafting} onJobSearch={handleJobSearch} />}
+            {messages.length === 0 && (
+              <Overview
+                onResumeCrafting={handleResumeCrafting}
+                onJobSearch={handleJobSearch}
+              />
+            )}
 
             {messages.map((message: Message, index: number) => (
               <PreviewMessage
@@ -246,7 +307,9 @@ export function Chat() {
 
             {isLoading &&
               messages.length > 0 &&
-              messages[messages.length - 1].role === "user" && <ThinkingMessage />}
+              messages[messages.length - 1].role === "user" && (
+                <ThinkingMessage />
+              )}
 
             <div
               ref={messagesEndRef}
@@ -270,71 +333,33 @@ export function Chat() {
         </main>
       </div>
 
-      {/* Split screen toggle button */}
-      {splitScreenMode !== "none" && (
-        <div className="absolute left-1/2 top-20 z-10 -translate-x-1/2">
-          <Button
-            type="button"
-            size="icon"
-            variant="outline"
-            className="h-7 w-7 rounded-full bg-background/95 backdrop-blur border-2 shadow-sm hover:bg-accent transition-colors"
-            onClick={handleBackToChat}
-            title="Close split screen"
-          >
-            <span className="text-xs">×</span>
-          </Button>
-        </div>
-      )}
+      {/* Right panel: keep it mounted to animate out, then unmount after transitionend */}
+      {(splitScreenMode !== "none" || panelVisible) && (
+        <div
+          ref={rightPanelRef}
+          className="flex flex-col border-l bg-background transition-[width] duration-300 ease-out overflow-hidden"
+          style={{ width: panelVisible ? "50%" : "0%" }}
+        >
+          {/* Close button stays inside so it slides with the panel */}
+          <div className="p-2">
+            <Button
+              type="button"
+              size="icon"
+              variant="destructive"
+              className="h-7 w-7 rounded-full bg-red-500 hover:bg-red-600 border-red-500 text-white shadow-sm transition-colors"
+              onClick={handleBackToChat}
+              title="Close split screen"
+            >
+              <span className="text-xs">×</span>
+            </Button>
+          </div>
 
-      {/* Right panel - only show when in split screen mode */}
-      {splitScreenMode !== "none" && (
-        <div className="w-1/2 flex flex-col border-l bg-background transition-all duration-500 ease-in-out">
-          {splitScreenMode === "resume" && <ResumePanel />}
-          {splitScreenMode === "job" && <JobPanel />}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Resume Panel Component
-function ResumePanel() {
-  return (
-    <div className="flex flex-col h-full p-8">
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center space-y-4 max-w-md">
-          <h2 className="text-3xl font-bold text-foreground">Resume Crafting</h2>
-          <p className="text-lg text-muted-foreground">
-            AI-powered resume optimization and generation tools will be available here.
-          </p>
-          <div className="bg-muted/50 rounded-lg p-6">
-            <p className="text-sm text-muted-foreground">
-              Coming soon: Resume analysis, optimization suggestions, and professional formatting.
-            </p>
+          <div className="flex-1">
+            {splitScreenMode === "resume" && <ResumePanel />}
+            {splitScreenMode === "job" && <JobPanel />}
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// Job Panel Component
-function JobPanel() {
-  return (
-    <div className="flex flex-col h-full p-8">
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center space-y-4 max-w-md">
-          <h2 className="text-3xl font-bold text-foreground">Job Search</h2>
-          <p className="text-lg text-muted-foreground">
-            Advanced job search and matching tools will be available here.
-          </p>
-          <div className="bg-muted/50 rounded-lg p-6">
-            <p className="text-sm text-muted-foreground">
-              Coming soon: Job database, advanced filters, and personalized recommendations.
-            </p>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
