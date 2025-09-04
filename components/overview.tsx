@@ -41,6 +41,7 @@ export const Overview = ({ onResumeCrafting, onJobSearch }: OverviewProps) => {
         <div className="flex flex-col sm:flex-row gap-4 pt-4 justify-center">
           <Button
             size="lg"
+            variant="outline"
             className="px-6 py-3 font-semibold"
             onClick={onResumeCrafting}
           >
