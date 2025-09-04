@@ -21,6 +21,7 @@ export function Chat() {
   const [input, setInput] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+  const [splitScreenMode, setSplitScreenMode] = React.useState<"none" | "resume" | "job">("none");
   const thinkingLogsByIdRef = React.useRef<Record<string, string[]>>({});
   const resumeByIdRef = React.useRef<Record<string, { url: string; name: string; contentType: string } | null>>({});
 
@@ -154,6 +155,19 @@ export function Chat() {
   const [messagesContainerRef, messagesEndRef] =
     useScrollToBottom<HTMLDivElement>(140);
 
+  // Split screen handlers
+  const handleResumeCrafting = () => {
+    setSplitScreenMode("resume");
+  };
+
+  const handleJobSearch = () => {
+    setSplitScreenMode("job");
+  };
+
+  const handleBackToChat = () => {
+    setSplitScreenMode("none");
+  };
+
   return (
     <div className="flex min-h-[100dvh] bg-background">
       {/* Left sidebar sliver with border; expands on toggle */}
@@ -174,6 +188,7 @@ export function Chat() {
               try {
                 await fetch("/api/session/reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chatId }) });
                 setMessages([]);
+                setSplitScreenMode("none"); // Reset split screen mode
                 toast.success("New session started");
               } catch (e: any) {
                 toast.error(e?.message || "Failed to reset session");
@@ -199,48 +214,127 @@ export function Chat() {
         </div>
       </aside>
 
-      {/* Main area that respects the sidebar width */}
-      <main className={cn("flex flex-col min-w-0 flex-1 min-h-[100dvh]", isSidebarOpen ? "ml-56" : "ml-16")}> 
-        <div
-          ref={messagesContainerRef}
-          className="flex flex-col min-w-0 flex-1 gap-6 pt-4 pb-40"
-        >
-          {messages.length === 0 && <Overview />}
+      {/* Chat area - full width or half width based on split screen mode */}
+      <div
+        className={cn(
+          "flex flex-col transition-all duration-500 ease-in-out",
+          splitScreenMode === "none"
+            ? cn("min-w-0 flex-1 min-h-[100dvh]", isSidebarOpen ? "ml-56" : "ml-16")
+            : "w-1/2 min-h-[100dvh]"
+        )}
+      >
 
-          {messages.map((message: Message, index: number) => (
-            <PreviewMessage
-              key={message.id}
-              chatId={chatId}
-              message={message}
-              isLoading={isLoading && messages.length - 1 === index}
-              thinkingLogs={thinkingLogsByIdRef.current[message.id]}
-            />
-          ))}
-
-          {isLoading &&
-            messages.length > 0 &&
-            messages[messages.length - 1].role === "user" && <ThinkingMessage />}
-
+        <main className={cn(
+          "flex flex-col min-w-0 flex-1",
+          splitScreenMode === "none" ? "" : "ml-0"
+        )}>
           <div
-            ref={messagesEndRef}
-            className="shrink-0 min-w-[24px] min-h-[24px]"
-          />
-        </div>
+            ref={messagesContainerRef}
+            className="flex flex-col min-w-0 flex-1 gap-6 pt-4 pb-40"
+          >
+            {messages.length === 0 && <Overview onResumeCrafting={handleResumeCrafting} onJobSearch={handleJobSearch} />}
 
-        <form className="flex sticky bottom-0 z-40 mx-auto px-4 bg-background pb-4 md:pb-6 gap-2 w-full md:max-w-3xl">
-          <MultimodalInput
-            chatId={chatId}
-            input={input}
-            setInput={setInput}
-            handleSubmit={handleSubmit}
-            isLoading={isLoading}
-            stop={stop}
-            messages={messages}
-            setMessages={setMessages}
-            append={append}
-          />
-        </form>
-      </main>
+            {messages.map((message: Message, index: number) => (
+              <PreviewMessage
+                key={message.id}
+                chatId={chatId}
+                message={message}
+                isLoading={isLoading && messages.length - 1 === index}
+                thinkingLogs={thinkingLogsByIdRef.current[message.id]}
+              />
+            ))}
+
+            {isLoading &&
+              messages.length > 0 &&
+              messages[messages.length - 1].role === "user" && <ThinkingMessage />}
+
+            <div
+              ref={messagesEndRef}
+              className="shrink-0 min-w-[24px] min-h-[24px]"
+            />
+          </div>
+
+          <form className="flex sticky bottom-0 z-40 mx-auto px-4 bg-background pb-4 md:pb-6 gap-2 w-full md:max-w-3xl">
+            <MultimodalInput
+              chatId={chatId}
+              input={input}
+              setInput={setInput}
+              handleSubmit={handleSubmit}
+              isLoading={isLoading}
+              stop={stop}
+              messages={messages}
+              setMessages={setMessages}
+              append={append}
+            />
+          </form>
+        </main>
+      </div>
+
+      {/* Split screen toggle button */}
+      {splitScreenMode !== "none" && (
+        <div className="absolute left-1/2 top-20 z-10 -translate-x-1/2">
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            className="h-7 w-7 rounded-full bg-background/95 backdrop-blur border-2 shadow-sm hover:bg-accent transition-colors"
+            onClick={handleBackToChat}
+            title="Close split screen"
+          >
+            <span className="text-xs">×</span>
+          </Button>
+        </div>
+      )}
+
+      {/* Right panel - only show when in split screen mode */}
+      {splitScreenMode !== "none" && (
+        <div className="w-1/2 flex flex-col border-l bg-background transition-all duration-500 ease-in-out">
+          {splitScreenMode === "resume" && <ResumePanel />}
+          {splitScreenMode === "job" && <JobPanel />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Resume Panel Component
+function ResumePanel() {
+  return (
+    <div className="flex flex-col h-full p-8">
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center space-y-4 max-w-md">
+          <h2 className="text-3xl font-bold text-foreground">Resume Crafting</h2>
+          <p className="text-lg text-muted-foreground">
+            AI-powered resume optimization and generation tools will be available here.
+          </p>
+          <div className="bg-muted/50 rounded-lg p-6">
+            <p className="text-sm text-muted-foreground">
+              Coming soon: Resume analysis, optimization suggestions, and professional formatting.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Job Panel Component
+function JobPanel() {
+  return (
+    <div className="flex flex-col h-full p-8">
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center space-y-4 max-w-md">
+          <h2 className="text-3xl font-bold text-foreground">Job Search</h2>
+          <p className="text-lg text-muted-foreground">
+            Advanced job search and matching tools will be available here.
+          </p>
+          <div className="bg-muted/50 rounded-lg p-6">
+            <p className="text-sm text-muted-foreground">
+              Coming soon: Job database, advanced filters, and personalized recommendations.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
